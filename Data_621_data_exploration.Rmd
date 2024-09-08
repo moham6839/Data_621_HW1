@@ -1,0 +1,68 @@
+---
+title: "DATA621_DATA_EXPLORATION"
+author: "Eddie Xu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(gtExtras)
+```
+
+## Data Preparation
+
+```{r data_source}
+mlb_df <- read.csv("moneyball-evaluation-data.csv")
+
+mlb_df
+```
+
+## Summary and Plots
+```{r summary}
+# mean of Base Hits by batters (1B,2B,3B,HR)
+mean_team_batting_h <- mean(mlb_df$TEAM_BATTING_H)
+
+# variance on Home runs by batters (4B)
+var_team_batting_hr <- var(mlb_df$TEAM_BATTING_HR)
+
+# summary of the data frame
+summary(mlb_df)
+```
+
+```{r plots}
+variable_x_histogram <- ggplot(mlb_df,aes(x = TEAM_BATTING_H)) +
+  geom_histogram(colour = 4, fill = "white") +
+  theme_minimal()
+
+variable_x_histogram
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
