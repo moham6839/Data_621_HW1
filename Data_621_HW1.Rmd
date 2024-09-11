@@ -21,6 +21,9 @@ library(corrr)
 library(caret)
 library(leaps)
 library(MASS)
+library(mice)
+library(dlookr)
+library(VIM)
 ```
 
 
@@ -83,10 +86,17 @@ ggplot(gather(mlb_training), aes(value)) +
 
 
 ```{r}
-
+positive_impact <- mlb_training %>%
+  dplyr::select(TARGET_WINS, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATTING_HR, 
+         TEAM_BATTING_BB, TEAM_BATTING_HBP, TEAM_BASERUN_SB, TEAM_FIELDING_DP, TEAM_PITCHING_SO)
 ```
 
 
+```{r}
+negative_impact <- mlb_training %>%
+  dplyr::select(TARGET_WINS, TEAM_BATTING_SO, TEAM_PITCHING_H, TEAM_PITCHING_HR, 
+                TEAM_PITCHING_BB, TEAM_BASERUN_CS, TEAM_FIELDING_E)
+```
 
 
 
@@ -177,7 +187,23 @@ na_mlb %>%
 
 
 
+```{r}
+imputed_Data <- mice(iris.mis, m=5, maxit = 50, method = 'pmm', seed = 500)
+summary(imputed_Data)
+```
+
+
+
+
+
 ## Data Preparation
+
+
+```{r}
+new_df$log_win_shares <- log1p(new_df$win_shares)
+```
+
+
 
 
 
@@ -192,6 +218,30 @@ step.model <- stepAIC(mlb_model, direction = "both",
                       trace = FALSE)
 summary(step.model)
 ```
+
+
+
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+step.model <- train(Fertility ~., data = swiss,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:5),
+                    trControl = train.control
+                    )
+step.model$results
+```
+
+
+```{r}
+models <- regsubsets(Fertility ~., data = swiss, nvmax = 5,
+                     method = "seqrep")
+summary(models)
+```
+
 
 
 
