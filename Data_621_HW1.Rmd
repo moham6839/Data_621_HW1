@@ -1,9 +1,17 @@
 ---
 title: 'Data 621 HW1: MLB Regression Project'
-author: "Mohamed Hassan-El Serafi"
+author: "Mohamed Hassan-El Serafi, Tony Cheug, Keith Colella, Yina, Qiao, Eddie Xu"
 date: "`r Sys.Date()`"
 output: html_document
 ---
+
+## Introduction
+
+In professional sports, attaining the most amount of wins in a season is the ultimate goal. Player and team statistics are commonly used to project and predict the number of wins for an upcoming season. In this analysis, we will use team statistics from every Major League Baseball team from 1871 to 2006 to predict the number of wins for each team. We will address how we handled missing values, creating new variables 
+
+
+
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
@@ -24,6 +32,13 @@ library(MASS)
 library(mice)
 library(dlookr)
 library(VIM)
+library(performance)
+library(ggcorrplot)
+library(rsample)
+library(skimr)
+library(performance)
+library(car)
+library(caret)
 ```
 
 
@@ -31,37 +46,100 @@ library(VIM)
 
 
 
-```{r}
-mlb_df <- read.csv("https://raw.githubusercontent.com/moham6839/Data_621_HW1/main/moneyball-evaluation-data.csv")
-```
+
 
 ```{r}
 mlb_training <- read.csv("https://raw.githubusercontent.com/moham6839/Data_621_HW1/main/moneyball-training-data.csv")
 ```
 
+```{r}
+mlb_test <- read.csv("https://raw.githubusercontent.com/moham6839/Data_621_HW1/main/moneyball-evaluation-data.csv")
+```
+
+
+Since `INDEX` is not a variable we will be using, we dropped it from the training and test sets:
 
 ```{r}
-glimpse(mlb_df)
+mlb_training <- mlb_training %>%
+  dplyr::select(-INDEX)
+```
+
+
+```{r}
+mlb_test <- mlb_test %>%
+  dplyr::select(-INDEX)
 ```
 
 
 
 
+## Glimpse and Summary of MLB Training Set
 
-
-
-```{r}
-reactable(mlb_df)
-```
 
 ```{r}
 reactable(mlb_training)
 ```
 
+```{r}
+mlb_training %>%
+  glimpse() %>%
+  kable() %>%
+  kable_styling()
+```
+
 
 ```{r}
-summary(mlb_training)
+mlb_training %>%
+  summary() %>%
+  kable() %>%
+  kable_styling()
 ```
+
+```{r}
+skim(mlb_training)
+```
+
+
+
+
+
+### Glimpse and Summary of MLB Test Set
+
+
+```{r}
+reactable(mlb_test)
+```
+
+
+
+
+
+
+```{r}
+mlb_test %>%
+  glimpse() %>%
+  kable() %>%
+  kable_styling()
+```
+
+
+
+```{r}
+mlb_test %>%
+  summary() %>%
+  kable() %>%
+  kable_styling()
+```
+
+
+```{r}
+skim(mlb_test)
+```
+
+
+
+
+
 
 
 
@@ -76,6 +154,11 @@ mlb_training %>%
 ```
 
 
+
+
+
+
+
 ```{r}
 ggplot(gather(mlb_training), aes(value)) + 
     geom_histogram(bins = 8) + 
@@ -85,31 +168,28 @@ ggplot(gather(mlb_training), aes(value)) +
 
 
 
-```{r}
-positive_impact <- mlb_training %>%
-  dplyr::select(TARGET_WINS, TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATTING_HR, 
-         TEAM_BATTING_BB, TEAM_BATTING_HBP, TEAM_BASERUN_SB, TEAM_FIELDING_DP, TEAM_PITCHING_SO)
-```
-
-
-```{r}
-negative_impact <- mlb_training %>%
-  dplyr::select(TARGET_WINS, TEAM_BATTING_SO, TEAM_PITCHING_H, TEAM_PITCHING_HR, 
-                TEAM_PITCHING_BB, TEAM_BASERUN_CS, TEAM_FIELDING_E)
-```
-
-
-
 
 
 
 
 ```{r}
 mlb_training %>% 
-  correlate() %>% 
-  focus(TARGET_WINS) %>%
-  arrange(desc(TARGET_WINS))
+  ggplot(aes(TARGET_WINS)) + 
+  geom_histogram(bins = 50, fill = 'blue', color="black",) +
+  geom_vline(aes(xintercept = mean(TARGET_WINS, na.rm = T)), col = "red", lty = 2) +
+  geom_vline(aes(xintercept = median(TARGET_WINS, na.rm = T)), col = "yellow", lty = 2) +
+  labs(x = element_blank(),
+       y = "Count",
+       title = "Distribution of Wins",
+       caption = "* Red line is the mean value and yellow is the median") + 
+  theme_classic()
 ```
+
+The `Wins` column follows a normal distribution. This will be important when deciding which transformation method to use. Since `Wins` will be our dependent variable, using a Box-Cox transformation 
+
+
+
+
 
 ```{r}
 mlb_training %>%
@@ -121,12 +201,32 @@ mlb_training %>%
   labs(x = element_blank(), y = "Wins")
 ```
 
+
+
+
+
+
 ```{r}
-temp <- mlb_training %>% 
-  cor(., use = "complete.obs") #%>%
-  
-temp[lower.tri(temp, diag=TRUE)] <- ""
-temp <- temp %>%
+cor_matrix <- mlb_training %>% 
+  cor(., use = "complete.obs") 
+```
+
+
+
+
+```{r}
+ggcorrplot::ggcorrplot(cor_matrix, type = "lower",
+          lab = TRUE, lab_size = 2.1, tl.cex = 8)
+```
+
+
+
+
+
+
+```{r}
+cor_matrix[lower.tri(cor_matrix, diag=TRUE)] <- ""
+cor_matrix <- cor_matrix %>%
   as.data.frame() %>%
   rownames_to_column() %>%
   gather(Variable, Correlation, -rowname) %>%
@@ -138,12 +238,23 @@ temp <- temp %>%
 ```
 
 
+
+
+
+
+
 ```{r}
-temp %>%
+cor_matrix %>%
   filter(abs(Correlation) > .5) %>%
   kable() %>%
   kable_styling()
 ```
+
+
+There were high correlations between batting and pitching stats that were measuring the same feature. For instance, homeruns (HR), Walks (BB), Strikeouts (SO), and Hits (H) for batting and pitching were highly correlated with their respective feature. This will be important to consider when selecting our features for modeling.
+
+
+
 
 
 ```{r}
@@ -158,26 +269,7 @@ mlb_training %>%
   rename(`Variable Missing Data` = variable,
          `Number of Records` = n,
          `Share of Total` = percent) %>%
-  kable() %>%
-  kable_styling()
-```
-
-
-
-
-
-
-
-```{r}
-na_mlb <- sapply(mlb_training, function(y) sum(length(which(is.na(y))))) %>% as.data.frame() 
-colnames(na_mlb) <- "NA_Count"
-na_mlb$Variable <- rownames(na_mlb)
-na_mlb %>% 
-  dplyr::select(Variable, NA_Count) %>% 
-  arrange(desc(NA_Count)) %>%
-  mutate("Missing_Data_Percentage" = round(NA_Count/nrow(mlb_training),2)*100) %>% 
-  #mutate("Missing_Data_Percentage" = paste0(round("Missing_Data_Percentage", ifelse("Missing_Data_Percentage" < 10, 1, 0)), "%")) %>%
-  kable(caption="<center>Missing Data Count and Percentage", align = "c") %>% 
+  kable(caption="<center>Missing Training Data Count and Percentage", align = "c") %>% 
   kable_styling(latex_options="scale_down", c("striped", "hover", "condensed", full_width=F))
 ```
 
@@ -187,10 +279,131 @@ na_mlb %>%
 
 
 
+
 ```{r}
-imputed_Data <- mice(iris.mis, m=5, maxit = 50, method = 'pmm', seed = 500)
-summary(imputed_Data)
+mlb_test %>% 
+  gather(variable, value) %>%
+  filter(is.na(value)) %>%
+  group_by(variable) %>%
+  tally() %>%
+  mutate(percent = n / nrow(mlb_test) * 100) %>%
+  mutate(percent = paste0(round(percent, ifelse(percent < 10, 1, 0)), "%")) %>%
+  arrange(desc(n)) %>%
+  rename(`Variable Missing Data` = variable,
+         `Number of Records` = n,
+         `Share of Total` = percent) %>%
+  kable(caption="<center>Missing Test Data Count and Percentage", align = "c") %>% 
+  kable_styling(latex_options="scale_down", c("striped", "hover", "condensed", full_width=F))
 ```
+
+
+
+
+
+The amount of missing values in the training and test datasets for `TEAM_BATTING_HBP` is exceptionally large, missing 92% and 93% of its values, respectively. If we imputed the missing values for an amount that large, the results would lack natural variation that could result in an effective model. Combined with their low correlation to `TARGET_WINS`, we decided to drop the column in the training and test data. For the other variables with missing values, we used a K-Nearest Neighbor function from the VIM package to impute the missing values. 
+
+
+### Flaws of Imputing `TEAM_BATTING_HBP`
+
+Dropping HBP was a difficult decision to make, considering HBP is used to calculate On-Base Percentage and At-Bats (AB), with AB also used to calculate Slugging Percentage and Batting Average. Having additional baseball statistics that are commonly used to evaluate team performance would have been helpful for this analysis. However, as you will see, the additional statistics that were produced when imputing HBP created higher than normal stats, particularly with Batting Average. The highest team batting average ever was accomplished by the Philadelphia Phillies in 1894, which had a Batting Average of .350. The mean of the Batting Average column is 0.5283062. Therefore, we can infer that after imputing HBP, the averages of the other statistics become inflated, and therefore unreliable when predicting the number of wins.
+
+
+```{r}
+mlb_train_imp2 <- mlb_training %>%
+  kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO", "TEAM_BATTING_HBP"),
+      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
+
+
+```{r}
+mlb_train_imp2 <- mlb_train_imp2 %>%
+  dplyr::mutate(TEAM_BATTING_1B = TEAM_BATTING_H - dplyr::select(., TEAM_BATTING_2B:TEAM_BATTING_HR) %>% rowSums(na.rm = FALSE)) %>%
+  dplyr::mutate(TEAM_BATTING_AB = TEAM_BATTING_H + TEAM_PITCHING_BB + TEAM_BATTING_SO + TEAM_BATTING_HBP) %>%
+  dplyr::mutate(TEAM_BATTING_AVERAGE = TEAM_BATTING_H/TEAM_BATTING_AB) %>%
+  dplyr::mutate(TEAM_BATTING_OBP = (TEAM_BATTING_H + TEAM_BATTING_BB + TEAM_BATTING_HBP)/(TEAM_BATTING_AB + TEAM_BATTING_BB + TEAM_BATTING_HBP)) %>%
+  dplyr::mutate(TEAM_BATTING_SLG = (TEAM_BATTING_1B + 2*TEAM_BATTING_2B + 3*TEAM_BATTING_3B + 4*TEAM_BATTING_HR)/TEAM_BATTING_AB) %>%
+  relocate(TEAM_BATTING_1B, .before = TEAM_BATTING_2B) 
+```
+
+```{r}
+reactable(mlb_train_imp2)
+```
+
+
+```{r}
+mean(mlb_train_imp2$TEAM_BATTING_AVERAGE)
+```
+
+
+
+
+
+
+### Dropping `TEAM_BATTING_HBP` and Imputing Missing Values
+
+
+
+
+**Training**
+
+
+
+```{r}
+mlb_training_no_hbp <- mlb_training %>%
+  dplyr::select(-TEAM_BATTING_HBP)
+```
+
+
+
+
+```{r}
+mlb_train_imp <- mlb_training_no_hbp %>%
+  kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO"),
+      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
+
+
+```{r}
+reactable(mlb_train_imp)
+```
+
+
+```{r}
+sum(is.na(mlb_train_imp))
+```
+
+
+
+
+
+
+
+
+
+**Test Set**
+
+```{r}
+mlb_test_no_hbp <- mlb_test %>%
+  dplyr::select(-TEAM_BATTING_HBP)
+```
+
+
+```{r}
+mlb_test_imp <- mlb_test_no_hbp %>%
+  kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO"),
+      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
+
+
+```{r}
+reactable(mlb_test_imp)
+```
+
+
+```{r}
+sum(is.na(mlb_test_imp))
+```
+
 
 
 
@@ -198,11 +411,111 @@ summary(imputed_Data)
 
 ## Data Preparation
 
+When analyzing the dataset, we realized that the number of singles (1B) were not a feature. We can deduce that the total number of homeruns (HR), triples (3B), and doubles (2B) can be subtracted from the total number of hits in order to get the total amount of singles.
+
 
 ```{r}
-new_df$log_win_shares <- log1p(new_df$win_shares)
+mlb_train_imp <- mlb_train_imp %>%
+  dplyr::mutate(TEAM_BATTING_1B = TEAM_BATTING_H - dplyr::select(., TEAM_BATTING_2B:TEAM_BATTING_HR) %>% rowSums(na.rm = FALSE)) %>%
+  relocate(TEAM_BATTING_1B, .before = TEAM_BATTING_2B)
 ```
 
+
+```{r}
+mlb_train_imp %>% 
+  ggplot(aes(TEAM_BATTING_1B)) + 
+  geom_histogram(bins = 50, fill = 'blue', color="black",) +
+  geom_vline(aes(xintercept = mean(TEAM_BATTING_1B, na.rm = T)), col = "red", lty = 2) +
+  geom_vline(aes(xintercept = median(TEAM_BATTING_1B, na.rm = T)), col = "yellow", lty = 2) +
+  labs(x = element_blank(),
+       y = "Count",
+       title = "Distribution of Singles",
+       caption = "* Red line is the mean value and yellow is the median") + 
+  theme_classic()
+```
+
+The number of singles shows a positive right skewness. Let's take a look at the correlation matrix that includes the new feature as well as the imputed data: 
+
+```{r}
+cor_matrix2 <- mlb_train_imp %>% 
+  cor(., use = "complete.obs") 
+```
+
+
+
+
+```{r}
+ggcorrplot::ggcorrplot(cor_matrix2, type = "lower",
+          lab = TRUE, lab_size = 2.1, tl.cex = 8)
+```
+
+
+
+
+
+
+### Log-Transforming Variables
+
+**Training Set**
+
+```{r}
+mlb_train_log <- log(mlb_train_imp)
+```
+
+
+```{r}
+mlb_train_log %>%
+  gather(-TARGET_WINS, key = "var", value = "value") %>% 
+  ggplot(aes(x = value, y = TARGET_WINS)) +
+    facet_wrap(~ var, scales = "free") +
+    geom_point(fill = "blue", color="blue") +
+    geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  labs(x = element_blank(), y = "Wins")
+```
+
+```{r}
+ggplot(gather(mlb_train_log), aes(value)) + 
+    geom_histogram(bins = 8) + 
+    facet_wrap(~key, scales = 'free_x')
+```
+
+```{r}
+mlb_train_log %>%
+  gather(variable, value, TARGET_WINS:TEAM_FIELDING_DP) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "blue", color="blue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+```
+
+
+
+
+
+
+
+
+
+
+
+
+**Test Set**
+
+```{r}
+mlb_test_log <- log(mlb_test_imp)
+```
+
+
+```{r}
+mlb_test_log
+```
+
+
+```{r}
+ggplot(gather(mlb_test_log), aes(value)) + 
+    geom_histogram(bins = 8) + 
+    facet_wrap(~key, scales = 'free_x')
+```
 
 
 
@@ -211,8 +524,49 @@ new_df$log_win_shares <- log1p(new_df$win_shares)
 
 ## Model Building
 
+### Model 1
+
+
+**Model using Training Set**
+
+
 ```{r}
-mlb_model <- lm(TARGET_WINS ~., data = mlb_training)
+mlb_model <- lm(TARGET_WINS ~., data = mlb_train_imp)
+# Stepwise regression model
+step.model <- stepAIC(mlb_model, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+```
+
+
+```{r}
+ggplot(step.model, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title="Residual vs. Fitted Values Plot") +
+  xlab("Fitted values") +
+  ylab("Residuals")
+```
+
+
+```{r}
+qqnorm(step.model$residuals)
+qqline(step.model$residuals)
+```
+
+
+
+
+
+
+
+
+
+**Model Using Train Log Set**
+
+
+```{r}
+mlb_model <- lm(TARGET_WINS ~., data = mlb_train_log)
 # Stepwise regression model
 step.model <- stepAIC(mlb_model, direction = "both", 
                       trace = FALSE)
@@ -221,13 +575,20 @@ summary(step.model)
 
 
 
+
+
+### Model 2
+
+**Model Using Train Set**
+
+
 ```{r}
 # Set seed for reproducibility
 set.seed(123)
 # Set up repeated k-fold cross-validation
 train.control <- trainControl(method = "cv", number = 10)
 # Train the model
-step.model <- train(Fertility ~., data = swiss,
+step.model <- train(TARGET_WINS ~., data = mlb_train_imp,
                     method = "leapBackward", 
                     tuneGrid = data.frame(nvmax = 1:5),
                     trControl = train.control
@@ -236,8 +597,33 @@ step.model$results
 ```
 
 
+
+
+**Model Using Train Log Set**
+
 ```{r}
-models <- regsubsets(Fertility ~., data = swiss, nvmax = 5,
+# Set seed for reproducibility
+set.seed(123)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+step.model <- train(TARGET_WINS ~., data = mlb_train_log,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:5),
+                    trControl = train.control
+                    )
+step.model$results
+```
+
+
+
+
+
+### Model 3
+
+
+```{r}
+models <- regsubsets(TARGET_WINS ~., data = mlb_train_imp, nvmax = 5,
                      method = "seqrep")
 summary(models)
 ```
@@ -254,3 +640,22 @@ summary(models)
 
 
 
+
+
+
+
+
+
+
+## References 
+
+
+* https://www.mastersindatascience.org/learning/how-to-deal-with-missing-data/#:~:text=When%20dealing%20with%20missing%20data,be%20required%2C%20even%20if%20incomplete.
+
+* https://stefvanbuuren.name/fimd/sec-MCAR.html
+
+* https://www.analyticsvidhya.com/blog/2021/10/handling-missing-value/#:~:text=Generally%2C%20this%20approach%20is%20not,useful%20data%20from%20the%20dataset.
+
+* https://campus.datacamp.com/courses/handling-missing-data-with-imputations-in-r/donor-based-imputation?ex=9
+
+* https://www.statmuse.com/mlb/ask/which-team-has-the-highest-batting-average-in-a-season
