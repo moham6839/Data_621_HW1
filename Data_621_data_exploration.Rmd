@@ -38,9 +38,9 @@ variable_x_histogram <- ggplot(mlb_df,aes(x = TEAM_BATTING_H)) +
 variable_x_histogram
 ```
 
+```{r}
 
-
-
+```
 
 
 
