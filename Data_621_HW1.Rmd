@@ -7,7 +7,7 @@ output: html_document
 
 ## Introduction
 
-In professional sports, attaining the most amount of wins in a season is the ultimate goal. Player and team statistics are commonly used to project and predict the number of wins for an upcoming season. In this analysis, we will use team statistics from every Major League Baseball team from 1871 to 2006 to predict the number of wins for each team. We will address how we handled missing values, creating new variables 
+In professional sports, attaining the most amount of wins in a season is the ultimate goal. Player and team statistics are commonly used to project and predict the number of wins for an upcoming season. In this analysis, we will use team statistics from every Major League Baseball team from 1871 to 2006 to predict the number of wins for each team. We will address how we handled missing values, created new variables based on the data available to us, and transformed variables to help normalize the data. We will show how we selected our variables for each of the three multiple regression models, and compare the results of each before determining which model to use for our test data. 
 
 
 
@@ -39,6 +39,7 @@ library(skimr)
 library(performance)
 library(car)
 library(caret)
+library(olsrr)
 ```
 
 
@@ -357,6 +358,7 @@ mlb_training_no_hbp <- mlb_training %>%
 
 
 ```{r}
+set.seed(123)
 mlb_train_imp <- mlb_training_no_hbp %>%
   kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO"),
       k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
@@ -374,6 +376,12 @@ sum(is.na(mlb_train_imp))
 
 
 
+```{r}
+set.seed(123)
+mlb_train_imp <- mlb_train_imp %>%
+  kNN(variable = c("TEAM_BATTING_HR"),
+      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
 
 
 
@@ -389,6 +397,7 @@ mlb_test_no_hbp <- mlb_test %>%
 
 
 ```{r}
+set.seed(123)
 mlb_test_imp <- mlb_test_no_hbp %>%
   kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO"),
       k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
@@ -456,10 +465,51 @@ ggcorrplot::ggcorrplot(cor_matrix2, type = "lower",
 
 ### Log-Transforming Variables
 
+Since transforming the variables before imputing missing values helps preserve the relationships between the variables in the regression model, we decided to 
+
+
+
+
 **Training Set**
 
+
+
+
 ```{r}
-mlb_train_log <- log(mlb_train_imp)
+mlb_training_no_hbp <- mlb_training_no_hbp %>%
+  dplyr::mutate(TEAM_BATTING_1B = TEAM_BATTING_H - dplyr::select(., TEAM_BATTING_2B:TEAM_BATTING_HR) %>% rowSums(na.rm = FALSE)) %>%
+  relocate(TEAM_BATTING_1B, .before = TEAM_BATTING_2B)
+```
+
+
+```{r}
+mlb_train_log <- log(mlb_training_no_hbp)
+```
+
+
+
+
+
+
+```{r}
+set.seed(123)
+mlb_train_log <- mlb_train_log%>%
+  kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO"),
+      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
+
+
+
+
+```{r}
+sum(is.na(mlb_train_log))
+```
+
+
+
+
+```{r}
+mlb_train_log <- log(mlb_train_log)
 ```
 
 
@@ -502,18 +552,42 @@ mlb_train_log %>%
 **Test Set**
 
 ```{r}
-mlb_test_log <- log(mlb_test_imp)
+mlb_test_no_hbp <- mlb_test_no_hbp %>%
+  dplyr::mutate(TEAM_BATTING_1B = TEAM_BATTING_H - dplyr::select(., TEAM_BATTING_2B:TEAM_BATTING_HR) %>% rowSums(na.rm = FALSE)) %>%
+  relocate(TEAM_BATTING_1B, .before = TEAM_BATTING_2B)
 ```
 
 
+
+
 ```{r}
-mlb_test_log
+mlb_test_log <- log(mlb_test_no_hbp)
+```
+
+
+
+
+
+
+```{r}
+set.seed(123)
+mlb_test_log <- mlb_test_log%>%
+  kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO"),
+      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
+
+
+
+
+
+```{r}
+sum(is.na(mlb_test_log))
 ```
 
 
 ```{r}
 ggplot(gather(mlb_test_log), aes(value)) + 
-    geom_histogram(bins = 8) + 
+    geom_histogram(bins = 10) + 
     facet_wrap(~key, scales = 'free_x')
 ```
 
@@ -524,23 +598,54 @@ ggplot(gather(mlb_test_log), aes(value)) +
 
 ## Model Building
 
-### Model 1
+### Model 1 - Using findCorrelation function from caret package
+
+For our first model, we utilized the findCorrelation function to determine which variables to use in our model:
 
 
-**Model using Training Set**
+
+
+**Model 1 using Training Set**
 
 
 ```{r}
-mlb_model <- lm(TARGET_WINS ~., data = mlb_train_imp)
-# Stepwise regression model
-step.model <- stepAIC(mlb_model, direction = "both", 
-                      trace = FALSE)
-summary(step.model)
+set.seed(123)
+highlyCorDescr <- findCorrelation(cor(mlb_train_imp), cutoff = .50, verbose = TRUE)
+```
+
+```{r}
+set.seed(123)
+keep_these <- names(mlb_train_imp)[!(names(mlb_train_imp) %in% colnames(mlb_train_imp)[highlyCorDescr])]
+mlb_train_features <- mlb_train_imp[, keep_these]
+```
+
+```{r}
+reactable(mlb_train_features)
 ```
 
 
+
+
 ```{r}
-ggplot(step.model, aes(x = .fitted, y = .resid)) +
+set.seed(123)
+m1 <- lm(TARGET_WINS ~., data = mlb_train_features)
+summary(m1)
+```
+
+```{r}
+#model <- lm(mpg ~ disp + hp + wt + drat, data = mtcars)
+ols_test_breusch_pagan(m1)
+```
+
+```{r}
+ols_coll_diag(m1)
+```
+
+
+
+
+```{r}
+ggplot(m1, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title="Residual vs. Fitted Values Plot") +
@@ -550,28 +655,120 @@ ggplot(step.model, aes(x = .fitted, y = .resid)) +
 
 
 ```{r}
-qqnorm(step.model$residuals)
-qqline(step.model$residuals)
+ggplot(data = m1, aes(x = m1$residuals)) +
+    geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
+    labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
+```
+
+```{r}
+ggplot(data = m1, aes(x = .resid)) +
+  geom_histogram(binwidth = 0.4) +
+  xlab("Residuals")
+```
+
+```{r}
+qqnorm(resid(m1))
+qqline(resid(m1))
 ```
 
 
-
-
-
-
-
-
-
-**Model Using Train Log Set**
 
 
 ```{r}
-mlb_model <- lm(TARGET_WINS ~., data = mlb_train_log)
-# Stepwise regression model
-step.model <- stepAIC(mlb_model, direction = "both", 
-                      trace = FALSE)
-summary(step.model)
+plot(m1)
 ```
+
+```{r}
+predictions <- predict(m1, newdata = mlb_test_imp)
+summary(predictions)
+```
+
+
+```{r}
+predictions
+```
+
+
+
+
+
+
+
+**Model 1 Using Train Log Set**
+
+
+```{r}
+set.seed(123)
+highlyCorDescr2 <- findCorrelation(cor(mlb_train_log), cutoff = .50, verbose = TRUE)
+```
+
+```{r}
+set.seed(123)
+keep_these2 <- names(mlb_train_log)[!(names(mlb_train_log) %in% colnames(mlb_train_log)[highlyCorDescr2])]
+mlb_train_features2 <- mlb_train_log[, keep_these2]
+```
+
+```{r}
+reactable(mlb_train_features2)
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+set.seed(123)
+m1_log <- lm(TARGET_WINS ~., data = mlb_train_features2)
+summary(m1_log)
+```
+
+The initial results did not produce a trustworthy model. The Adjusted R-squared value was 21.14%, meaning the independent variables in the model can only account for 21.14% of the variance of `TARGET_WINS`. There were a considerable amount of independent variables that had a p-value greater than 0.05, which indicates that they are not statistically significant and could be affecting the model's ability to determine the impact other variables may have on the explaining the variance of `TARGET_WINS`. We decided to re-run the model without the variables with high p-values to see any improvement in our model. The variables with p-values greater than 0.05 and will be removed are `TEAM_BATTING_2B`, `TEAM_BATTING_3B`, `TEAM_BATTING_HR`, `TEAM_BATTING_SO`, and `TEAM_PITCHING_SO`:
+
+
+```{r}
+set.seed(123)
+m1_log2 <- lm(TARGET_WINS ~ TEAM_BATTING_BB + TEAM_BASERUN_SB + TEAM_BASERUN_CS + TEAM_PITCHING_HR + TEAM_PITCHING_H + TEAM_PITCHING_BB + TEAM_FIELDING_DP, data = mlb_train_features2)
+summary(m1_log2)
+```
+
+
+Removing the variables did not impact the Adjusted R-squared value, which shows a decrease of 0.02 to 21.12%. 
+
+
+```{r}
+ggplot(m1_log2, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title="Residual vs. Fitted Values Plot") +
+  xlab("Fitted values") +
+  ylab("Residuals")
+```
+
+```{r}
+ggplot(data = m1_log2, aes(x = .resid)) +
+  geom_histogram(binwidth = 0.03) +
+  xlab("Residuals")
+```
+
+
+```{r}
+qqnorm(resid(m1_log2))
+qqline(resid(m1_log2))
+```
+
+
+
+
+
+
+
+
+
 
 
 
@@ -579,7 +776,28 @@ summary(step.model)
 
 ### Model 2
 
-**Model Using Train Set**
+**Model 2 Using Train Set**
+
+
+```{r}
+filterCtrl <- rfeControl(functions=rfFuncs, method="cv", number=3)
+results <- rfe(x= mlb_train_imp[,2:16],y= mlb_train_imp[,1], sizes=c(2:16), rfeControl=filterCtrl)
+results
+```
+
+
+```{r}
+set.seed(123)
+m2 <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_CS + TEAM_BATTING_BB + TEAM_PITCHING_SO, data = mlb_train_imp)
+summary(m2)
+```
+
+
+
+
+
+
+
 
 
 ```{r}
@@ -599,7 +817,35 @@ step.model$results
 
 
 
-**Model Using Train Log Set**
+
+
+
+
+
+**Model 2 Using Train Log Set**
+
+
+```{r}
+mlb_train_log2 <- mlb_train_features2 %>%
+  mutate_if(is.numeric, function(x)ifelse(is.infinite(x), median(mlb_train_features2),x))
+```
+
+
+```{r}
+filterCtrl2 <- rfeControl(functions=rfFuncs, method="cv", number=3)
+results2 <- rfe(x= mlb_train_features2[,2:16],y= mlb_train_features2[,1], sizes=c(2:16), rfeControl=filterCtrl2)
+results2
+```
+
+```{r}
+mlb_train_features
+```
+
+
+
+
+
+
 
 ```{r}
 # Set seed for reproducibility
@@ -619,7 +865,20 @@ step.model$results
 
 
 
+
 ### Model 3
+
+
+```{r}
+#use roc_curve area as score
+roc_imp <- filterVarImp(x = mlb_train_imp[,2:16], y = mlb_train_imp$TARGET_WINS)
+
+#sort the score in decreasing order
+roc_imp <- data.frame(cbind(variable = rownames(roc_imp), score = roc_imp[,1]))
+roc_imp$score <- as.double(roc_imp$score)
+roc_imp[order(roc_imp$score,decreasing = TRUE),]
+```
+
 
 
 ```{r}
@@ -628,6 +887,9 @@ models <- regsubsets(TARGET_WINS ~., data = mlb_train_imp, nvmax = 5,
 summary(models)
 ```
 
+```{r}
+ols_step_backward_aic(m1)
+```
 
 
 
@@ -635,6 +897,9 @@ summary(models)
 ## Model Selection
 
 
+```{r}
+
+```
 
 
 
@@ -659,3 +924,9 @@ summary(models)
 * https://campus.datacamp.com/courses/handling-missing-data-with-imputations-in-r/donor-based-imputation?ex=9
 
 * https://www.statmuse.com/mlb/ask/which-team-has-the-highest-batting-average-in-a-season
+
+* https://jtr13.github.io/cc21fall2/feature-selection-in-r.html
+
+* http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/#google_vignette
+
+* https://www.bookdown.org/rwnahhas/RMPH/mi-fitting.html
