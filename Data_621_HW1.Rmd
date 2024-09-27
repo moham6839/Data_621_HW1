@@ -333,7 +333,7 @@ reactable(mlb_train_imp2)
 
 
 ```{r}
-mean(mlb_train_imp2$TEAM_BATTING_AVERAGE)
+max(mlb_train_imp2$TEAM_BATTING_AVERAGE)
 ```
 
 
@@ -509,9 +509,7 @@ sum(is.na(mlb_train_log))
 
 
 
-```{r}
-mlb_train_log <- log(mlb_train_log)
-```
+
 
 
 ```{r}
@@ -606,7 +604,7 @@ For our first model, we utilized the findCorrelation function to determine which
 
 
 
-**Model 1 using Training Set**
+
 
 
 ```{r}
@@ -633,20 +631,29 @@ m1 <- lm(TARGET_WINS ~., data = mlb_train_features)
 summary(m1)
 ```
 
+The initial results
+
+
+
+
+
+
 ```{r}
-#model <- lm(mpg ~ disp + hp + wt + drat, data = mtcars)
-ols_test_breusch_pagan(m1)
+set.seed(123)
+m1_train_revised <- lm(TARGET_WINS ~ TEAM_BATTING_2B + TEAM_BATTING_BB + TEAM_BASERUN_SB + TEAM_PITCHING_SO + TEAM_FIELDING_DP, data = mlb_train_features)
+summary(m1_train_revised)
 ```
 
-```{r}
-ols_coll_diag(m1)
-```
+
+
+
+
 
 
 
 
 ```{r}
-ggplot(m1, aes(x = .fitted, y = .resid)) +
+ggplot(m1_train_revised, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title="Residual vs. Fitted Values Plot") +
@@ -656,28 +663,26 @@ ggplot(m1, aes(x = .fitted, y = .resid)) +
 
 
 ```{r}
-ggplot(data = m1, aes(x = m1$residuals)) +
+ggplot(data = m1_train_revised, aes(x = m1_train_revised$residuals)) +
     geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
     labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
 ```
 
 ```{r}
-ggplot(data = m1, aes(x = .resid)) +
+ggplot(data = m1_train_revised, aes(x = .resid)) +
   geom_histogram(binwidth = 0.4) +
   xlab("Residuals")
 ```
 
 ```{r}
-qqnorm(resid(m1))
-qqline(resid(m1))
+qqnorm(resid(m1_train_revised))
+qqline(resid(m1_train_revised))
 ```
 
 
 
 
-```{r}
-plot(m1)
-```
+
 
 ```{r}
 predictions <- predict(m1, newdata = mlb_test_imp)
@@ -686,16 +691,16 @@ summary(predictions)
 
 
 ```{r}
-predictions
+predictions$
 ```
 
 
 
 
+### Model 2 - Using findCorrelation function for Log-Transformed Train Set
 
 
 
-**Model 1 Using Train Log Set**
 
 
 ```{r}
@@ -775,12 +780,11 @@ qqline(resid(m1_log2))
 
 
 
-### Model 2
-
-**Model 2 Using Train Set**
+### Model 3 - Using Recursive Feature Elimination
 
 
 ```{r}
+set.seed(123)
 filterCtrl <- rfeControl(functions=rfFuncs, method="cv", number=3)
 results <- rfe(x= mlb_train_imp[,2:16],y= mlb_train_imp[,1], sizes=c(2:16), rfeControl=filterCtrl)
 results
@@ -789,8 +793,37 @@ results
 
 ```{r}
 set.seed(123)
-m2 <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_CS + TEAM_BATTING_BB + TEAM_PITCHING_SO, data = mlb_train_imp)
-summary(m2)
+m3 <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_CS + TEAM_BATTING_BB + TEAM_PITCHING_SO, data = mlb_train_imp)
+summary(m3)
+```
+
+
+
+```{r}
+ggplot(m3, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title="Residual vs. Fitted Values Plot") +
+  xlab("Fitted values") +
+  ylab("Residuals")
+```
+
+
+```{r}
+ggplot(data = m3, aes(x = m3$residuals)) +
+    geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
+    labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
+```
+
+```{r}
+ggplot(data = m3, aes(x = .resid)) +
+  geom_histogram(binwidth = 0.4) +
+  xlab("Residuals")
+```
+
+```{r}
+qqnorm(resid(m3))
+qqline(resid(m3))
 ```
 
 
@@ -799,20 +832,21 @@ summary(m2)
 
 
 
+### Model 4 - Using Recursive Feature Elimination for Log-Transformed Train Set
+
+```{r}
+mlb_train_log[sapply(mlb_train_log, is.infinite)] <- NA
+```
+
+```{r}
+sum(is.na(mlb_train_log))
+```
 
 
 ```{r}
-# Set seed for reproducibility
 set.seed(123)
-# Set up repeated k-fold cross-validation
-train.control <- trainControl(method = "cv", number = 10)
-# Train the model
-step.model <- train(TARGET_WINS ~., data = mlb_train_imp,
-                    method = "leapBackward", 
-                    tuneGrid = data.frame(nvmax = 1:5),
-                    trControl = train.control
-                    )
-step.model$results
+mlb_train_log <- mlb_train_log %>%
+  kNN(k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
 ```
 
 
@@ -822,45 +856,83 @@ step.model$results
 
 
 
-
-**Model 2 Using Train Log Set**
 
 
 ```{r}
-mlb_train_log2 <- mlb_train_features2 %>%
-  mutate_if(is.numeric, function(x)ifelse(is.infinite(x), median(mlb_train_features2),x))
+mlb_train_log2 <- mlb_train_log %>%
+  mutate_if(is.numeric, function(x)ifelse(is.infinite(x), median(mlb_train_log),x))
 ```
+
+
+
+```{r}
+revised_test_model <- revised_test_model %>%
+  mutate_if(is.numeric, function(x)ifelse(is.infinite(x), median(revised_test_model$Height_log), x))
+```
+
+
+
+```{r}
+m4 <- lm(TARGET_WINS ~., data=mlb_train_log)
+summary(m4)
+```
+
+
+
+
+
+```{r}
+mlb_train_log
+```
+
+
 
 
 ```{r}
 filterCtrl2 <- rfeControl(functions=rfFuncs, method="cv", number=3)
-results2 <- rfe(x= mlb_train_features2[,2:16],y= mlb_train_features2[,1], sizes=c(2:16), rfeControl=filterCtrl2)
+results2 <- rfe(x= mlb_train_log[,2:16],y= mlb_train_log[,1], sizes=c(2:16), rfeControl=filterCtrl2)
 results2
 ```
 
+
+
 ```{r}
-mlb_train_features
+m4 <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_SB + TEAM_PITCHING_SO + TEAM_BATTING_BB, data=mlb_train_log)
+summary(m4)
+```
+
+
+```{r}
+ggplot(m4, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title="Residual vs. Fitted Values Plot") +
+  xlab("Fitted values") +
+  ylab("Residuals")
+```
+
+
+```{r}
+ggplot(data = m4, aes(x = m4$residuals)) +
+    geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
+    labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
+```
+
+```{r}
+ggplot(data = m4, aes(x = .resid)) +
+  geom_histogram(binwidth = 0.2) +
+  xlab("Residuals")
+```
+
+```{r}
+qqnorm(resid(m4))
+qqline(resid(m4))
 ```
 
 
 
 
 
-
-
-```{r}
-# Set seed for reproducibility
-set.seed(123)
-# Set up repeated k-fold cross-validation
-train.control <- trainControl(method = "cv", number = 10)
-# Train the model
-step.model <- train(TARGET_WINS ~., data = mlb_train_log,
-                    method = "leapBackward", 
-                    tuneGrid = data.frame(nvmax = 1:5),
-                    trControl = train.control
-                    )
-step.model$results
-```
 
 
 
@@ -870,27 +942,11 @@ step.model$results
 ### Model 3
 
 
-```{r}
-#use roc_curve area as score
-roc_imp <- filterVarImp(x = mlb_train_imp[,2:16], y = mlb_train_imp$TARGET_WINS)
-
-#sort the score in decreasing order
-roc_imp <- data.frame(cbind(variable = rownames(roc_imp), score = roc_imp[,1]))
-roc_imp$score <- as.double(roc_imp$score)
-roc_imp[order(roc_imp$score,decreasing = TRUE),]
-```
 
 
 
-```{r}
-models <- regsubsets(TARGET_WINS ~., data = mlb_train_imp, nvmax = 5,
-                     method = "seqrep")
-summary(models)
-```
 
-```{r}
-ols_step_backward_aic(m1)
-```
+
 
 
 
@@ -899,8 +955,10 @@ ols_step_backward_aic(m1)
 
 
 ```{r}
-
+compare_performance(m1_train_revised, m1_log2, m3, m4)
 ```
+
+
 
 
 
