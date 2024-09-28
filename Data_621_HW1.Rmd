@@ -187,7 +187,7 @@ mlb_training %>%
   theme_classic()
 ```
 
-The `Wins` column follows a normal distribution. This will be important when deciding which transformation method to use. Since `Wins` will be our dependent variable, using a Box-Cox transformation 
+The `TARGET_WINS` column follows a normal distribution. This will be important when deciding which transformation method to use. Since `TARGET_WINS` will be our dependent variable, using a Box-Cox transformation may not be the best method to use since our dependent variable follows a normal distribution 
 
 
 
@@ -373,6 +373,8 @@ reactable(mlb_train_imp)
 
 ```{r}
 sum(is.na(mlb_train_imp))
+sum(is.nan(as.matrix(mlb_train_imp)))
+sum(is.infinite(as.matrix(mlb_train_imp)))
 ```
 
 
@@ -502,10 +504,29 @@ mlb_train_log <- mlb_train_log%>%
 
 
 
+
+
 ```{r}
 sum(is.na(mlb_train_log))
+sum(is.nan(as.matrix(mlb_train_log)))
+sum(is.infinite(as.matrix(mlb_train_log)))
 ```
 
+
+
+
+```{r}
+mlb_train_log[sapply(mlb_train_log, is.infinite)] <- NA
+```
+
+
+
+
+```{r}
+set.seed(123)
+mlb_train_log <- mlb_train_log %>%
+  kNN(k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
 
 
 
@@ -577,11 +598,39 @@ mlb_test_log <- mlb_test_log%>%
 
 
 
+```{r}
+sum(is.na(mlb_test_log))
+sum(is.nan(as.matrix(mlb_test_log)))
+sum(is.infinite(as.matrix(mlb_test_log)))
+```
+
+
+
+```{r}
+mlb_test_log[sapply(mlb_test_log, is.infinite)] <- NA
+```
+
+
+
+
+```{r}
+set.seed(123)
+mlb_test_log <- mlb_test_log %>%
+  kNN(k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
+```
 
 
 ```{r}
 sum(is.na(mlb_test_log))
+sum(is.nan(as.matrix(mlb_test_log)))
+sum(is.infinite(as.matrix(mlb_test_log)))
 ```
+
+
+
+
+
+
 
 
 ```{r}
@@ -600,10 +649,6 @@ ggplot(gather(mlb_test_log), aes(value)) +
 ### Model 1 - Using findCorrelation function from caret package
 
 For our first model, we utilized the findCorrelation function to determine which variables to use in our model:
-
-
-
-
 
 
 
@@ -701,8 +746,6 @@ predictions$
 
 
 
-
-
 ```{r}
 set.seed(123)
 highlyCorDescr2 <- findCorrelation(cor(mlb_train_log), cutoff = .50, verbose = TRUE)
@@ -729,8 +772,8 @@ reactable(mlb_train_features2)
 
 ```{r}
 set.seed(123)
-m1_log <- lm(TARGET_WINS ~., data = mlb_train_features2)
-summary(m1_log)
+m2_log <- lm(TARGET_WINS ~., data = mlb_train_features2)
+summary(m2_log)
 ```
 
 The initial results did not produce a trustworthy model. The Adjusted R-squared value was 21.14%, meaning the independent variables in the model can only account for 21.14% of the variance of `TARGET_WINS`. There were a considerable amount of independent variables that had a p-value greater than 0.05, which indicates that they are not statistically significant and could be affecting the model's ability to determine the impact other variables may have on the explaining the variance of `TARGET_WINS`. We decided to re-run the model without the variables with high p-values to see any improvement in our model. The variables with p-values greater than 0.05 and will be removed are `TEAM_BATTING_2B`, `TEAM_BATTING_3B`, `TEAM_BATTING_HR`, `TEAM_BATTING_SO`, and `TEAM_PITCHING_SO`:
@@ -738,8 +781,8 @@ The initial results did not produce a trustworthy model. The Adjusted R-squared 
 
 ```{r}
 set.seed(123)
-m1_log2 <- lm(TARGET_WINS ~ TEAM_BATTING_BB + TEAM_BASERUN_SB + TEAM_BASERUN_CS + TEAM_PITCHING_HR + TEAM_PITCHING_H + TEAM_PITCHING_BB + TEAM_FIELDING_DP, data = mlb_train_features2)
-summary(m1_log2)
+m2_log2 <- lm(TARGET_WINS ~ TEAM_BATTING_BB + TEAM_BASERUN_SB + TEAM_BASERUN_CS + TEAM_PITCHING_HR + TEAM_PITCHING_H + TEAM_PITCHING_BB + TEAM_FIELDING_DP, data = mlb_train_features2)
+summary(m2_log2)
 ```
 
 
@@ -747,7 +790,7 @@ Removing the variables did not impact the Adjusted R-squared value, which shows 
 
 
 ```{r}
-ggplot(m1_log2, aes(x = .fitted, y = .resid)) +
+ggplot(m2_log2, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title="Residual vs. Fitted Values Plot") +
@@ -756,15 +799,15 @@ ggplot(m1_log2, aes(x = .fitted, y = .resid)) +
 ```
 
 ```{r}
-ggplot(data = m1_log2, aes(x = .resid)) +
+ggplot(data = m2_log2, aes(x = .resid)) +
   geom_histogram(binwidth = 0.03) +
   xlab("Residuals")
 ```
 
 
 ```{r}
-qqnorm(resid(m1_log2))
-qqline(resid(m1_log2))
+qqnorm(resid(m2_log2))
+qqline(resid(m2_log2))
 ```
 
 
@@ -772,15 +815,7 @@ qqline(resid(m1_log2))
 
 
 
-
-
-
-
-
-
-
-
-### Model 3 - Using Recursive Feature Elimination
+### Model 3 - Using Recursive Feature Elimination on Imputed Train Set
 
 
 ```{r}
@@ -793,14 +828,14 @@ results
 
 ```{r}
 set.seed(123)
-m3 <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_CS + TEAM_BATTING_BB + TEAM_PITCHING_SO, data = mlb_train_imp)
-summary(m3)
+m3_train <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_CS + TEAM_BATTING_BB + TEAM_PITCHING_SO, data = mlb_train_imp)
+summary(m3_train)
 ```
 
 
 
 ```{r}
-ggplot(m3, aes(x = .fitted, y = .resid)) +
+ggplot(m3_train, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title="Residual vs. Fitted Values Plot") +
@@ -810,20 +845,20 @@ ggplot(m3, aes(x = .fitted, y = .resid)) +
 
 
 ```{r}
-ggplot(data = m3, aes(x = m3$residuals)) +
+ggplot(data = m3_train, aes(x = m3$residuals)) +
     geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
     labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
 ```
 
 ```{r}
-ggplot(data = m3, aes(x = .resid)) +
+ggplot(data = m3_train, aes(x = .resid)) +
   geom_histogram(binwidth = 0.4) +
   xlab("Residuals")
 ```
 
 ```{r}
-qqnorm(resid(m3))
-qqline(resid(m3))
+qqnorm(resid(m3_train))
+qqline(resid(m3_train))
 ```
 
 
@@ -832,58 +867,7 @@ qqline(resid(m3))
 
 
 
-### Model 4 - Using Recursive Feature Elimination for Log-Transformed Train Set
-
-```{r}
-mlb_train_log[sapply(mlb_train_log, is.infinite)] <- NA
-```
-
-```{r}
-sum(is.na(mlb_train_log))
-```
-
-
-```{r}
-set.seed(123)
-mlb_train_log <- mlb_train_log %>%
-  kNN(k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
-```
-
-
-
-
-
-
-
-
-
-
-```{r}
-mlb_train_log2 <- mlb_train_log %>%
-  mutate_if(is.numeric, function(x)ifelse(is.infinite(x), median(mlb_train_log),x))
-```
-
-
-
-```{r}
-revised_test_model <- revised_test_model %>%
-  mutate_if(is.numeric, function(x)ifelse(is.infinite(x), median(revised_test_model$Height_log), x))
-```
-
-
-
-```{r}
-m4 <- lm(TARGET_WINS ~., data=mlb_train_log)
-summary(m4)
-```
-
-
-
-
-
-```{r}
-mlb_train_log
-```
+### Model 4 - Using Recursive Feature Elimination for Log-Transformed Imputed Train Set
 
 
 
@@ -897,13 +881,13 @@ results2
 
 
 ```{r}
-m4 <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_SB + TEAM_PITCHING_SO + TEAM_BATTING_BB, data=mlb_train_log)
-summary(m4)
+m4_log <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_SB + TEAM_PITCHING_SO + TEAM_BATTING_BB, data=mlb_train_log)
+summary(m4_log)
 ```
 
 
 ```{r}
-ggplot(m4, aes(x = .fitted, y = .resid)) +
+ggplot(m4_log, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title="Residual vs. Fitted Values Plot") +
@@ -913,39 +897,21 @@ ggplot(m4, aes(x = .fitted, y = .resid)) +
 
 
 ```{r}
-ggplot(data = m4, aes(x = m4$residuals)) +
+ggplot(data = m4_log, aes(x = m4$residuals)) +
     geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
     labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
 ```
 
 ```{r}
-ggplot(data = m4, aes(x = .resid)) +
+ggplot(data = m4_log, aes(x = .resid)) +
   geom_histogram(binwidth = 0.2) +
   xlab("Residuals")
 ```
 
 ```{r}
-qqnorm(resid(m4))
-qqline(resid(m4))
+qqnorm(resid(m4_log))
+qqline(resid(m4_log))
 ```
-
-
-
-
-
-
-
-
-
-
-
-### Model 3
-
-
-
-
-
-
 
 
 
