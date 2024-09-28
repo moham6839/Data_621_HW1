@@ -952,8 +952,13 @@ summary(predictions)
 
 
 ```{r}
-mlb_test_log$predicted_wins <- predictions 
+mlb_test_log$predicted_wins <- round(exp(predictions))
 ```
+
+
+
+
+
 
 
 ```{r}
