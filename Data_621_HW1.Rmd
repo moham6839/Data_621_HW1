@@ -1,6 +1,6 @@
 ---
 title: 'Data 621 HW1: MLB Regression Project'
-author: "Mohamed Hassan-El Serafi, Chun Shing Leung, Keith Colella, Yina, Qiao, Eddie Xu"
+author: "Mohamed Hassan-El Serafi, Chun Shing Leung, Keith Colella, Yina Qiao, Eddie Xu"
 date: "`r Sys.Date()`"
 output: html_document
 ---
@@ -14,7 +14,7 @@ In professional sports, attaining the most amount of wins in a season is the ult
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
 ```{r}
@@ -41,6 +41,7 @@ library(car)
 library(caret)
 library(olsrr)
 library(DataExplorer)
+library(vip)
 ```
 
 
@@ -205,6 +206,19 @@ mlb_training %>%
 
 
 
+```{r}
+ggplot(stack(mlb_training), aes(x = ind, y = values)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0, 5000))+
+  labs(x = element_blank(), y = element_blank()) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+
+
+
 
 
 
@@ -311,6 +325,7 @@ Dropping HBP was a difficult decision to make, considering HBP is used to calcul
 
 
 ```{r}
+set.seed(123)
 mlb_train_imp2 <- mlb_training %>%
   kNN(variable = c("TEAM_BASERUN_CS", "TEAM_FIELDING_DP", "TEAM_BASERUN_SB", "TEAM_BATTING_SO", "TEAM_PITCHING_SO", "TEAM_BATTING_HBP"),
       k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
@@ -318,6 +333,7 @@ mlb_train_imp2 <- mlb_training %>%
 
 
 ```{r}
+set.seed(123)
 mlb_train_imp2 <- mlb_train_imp2 %>%
   dplyr::mutate(TEAM_BATTING_1B = TEAM_BATTING_H - dplyr::select(., TEAM_BATTING_2B:TEAM_BATTING_HR) %>% rowSums(na.rm = FALSE)) %>%
   dplyr::mutate(TEAM_BATTING_AB = TEAM_BATTING_H + TEAM_PITCHING_BB + TEAM_BATTING_SO + TEAM_BATTING_HBP) %>%
@@ -351,6 +367,7 @@ max(mlb_train_imp2$TEAM_BATTING_AVERAGE)
 
 
 ```{r}
+set.seed(123)
 mlb_training_no_hbp <- mlb_training %>%
   dplyr::select(-TEAM_BATTING_HBP)
 ```
@@ -379,12 +396,7 @@ sum(is.infinite(as.matrix(mlb_train_imp)))
 
 
 
-```{r}
-set.seed(123)
-mlb_train_imp <- mlb_train_imp %>%
-  kNN(variable = c("TEAM_BATTING_HR"),
-      k = 5, numFun = weighted.mean, weightDist = TRUE, imp_var = FALSE)
-```
+
 
 
 
@@ -394,6 +406,7 @@ mlb_train_imp <- mlb_train_imp %>%
 **Test Set**
 
 ```{r}
+set.seed(123)
 mlb_test_no_hbp <- mlb_test %>%
   dplyr::select(-TEAM_BATTING_HBP)
 ```
@@ -680,9 +693,6 @@ The initial results
 
 
 
-
-
-
 ```{r}
 set.seed(123)
 m1_train_revised <- lm(TARGET_WINS ~ TEAM_BATTING_2B + TEAM_BATTING_BB + TEAM_BASERUN_SB + TEAM_PITCHING_SO + TEAM_FIELDING_DP, data = mlb_train_features)
@@ -729,15 +739,7 @@ qqline(resid(m1_train_revised))
 
 
 
-```{r}
-predictions <- predict(m1, newdata = mlb_test_imp)
-summary(predictions)
-```
 
-
-```{r}
-predictions$
-```
 
 
 
@@ -770,6 +772,7 @@ reactable(mlb_train_features2)
 
 
 
+
 ```{r}
 set.seed(123)
 m2_log <- lm(TARGET_WINS ~., data = mlb_train_features2)
@@ -781,7 +784,7 @@ The initial results did not produce a trustworthy model. The Adjusted R-squared 
 
 ```{r}
 set.seed(123)
-m2_log2 <- lm(TARGET_WINS ~ TEAM_BATTING_BB + TEAM_BASERUN_SB + TEAM_BASERUN_CS + TEAM_PITCHING_HR + TEAM_PITCHING_H + TEAM_PITCHING_BB + TEAM_FIELDING_DP, data = mlb_train_features2)
+m2_log2 <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_2B + TEAM_PITCHING_H + TEAM_PITCHING_BB + TEAM_PITCHING_SO, data = mlb_train_features2)
 summary(m2_log2)
 ```
 
@@ -845,7 +848,7 @@ ggplot(m3_train, aes(x = .fitted, y = .resid)) +
 
 
 ```{r}
-ggplot(data = m3_train, aes(x = m3$residuals)) +
+ggplot(data = m3_train, aes(x = m3_train$residuals)) +
     geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
     labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
 ```
@@ -873,6 +876,7 @@ qqline(resid(m3_train))
 
 
 ```{r}
+set.seed(123)
 filterCtrl2 <- rfeControl(functions=rfFuncs, method="cv", number=3)
 results2 <- rfe(x= mlb_train_log[,2:16],y= mlb_train_log[,1], sizes=c(2:16), rfeControl=filterCtrl2)
 results2
@@ -881,9 +885,19 @@ results2
 
 
 ```{r}
+set.seed(123)
 m4_log <- lm(TARGET_WINS ~ TEAM_FIELDING_E + TEAM_BATTING_H + TEAM_BASERUN_SB + TEAM_PITCHING_SO + TEAM_BATTING_BB, data=mlb_train_log)
 summary(m4_log)
 ```
+
+
+```{r}
+set.seed(123)
+vip(m4_log)
+```
+
+
+
 
 
 ```{r}
@@ -897,7 +911,7 @@ ggplot(m4_log, aes(x = .fitted, y = .resid)) +
 
 
 ```{r}
-ggplot(data = m4_log, aes(x = m4$residuals)) +
+ggplot(data = m4_log, aes(x = m4_log$residuals)) +
     geom_histogram(bins = 10, fill = 'steelblue', color = 'black') +
     labs(title = 'Histogram of Residuals', x = 'Residuals', y = 'Frequency')
 ```
@@ -921,17 +935,36 @@ qqline(resid(m4_log))
 
 
 ```{r}
-compare_performance(m1_train_revised, m1_log2, m3, m4)
+set.seed(123)
+compare_performance(m1_train_revised, m2_log2, m3_train, m4_log)
+```
+
+
+Based on the results from each model, we decided to go with the 4th model, `m4_log`, which produced the highest Adjusted R-squared at 32% and the lowest Root Mean Squared Error at 0.182. The final variables for the model are `TEAM_FIELDING_E`, `TEAM_BATTING_H` `TEAM_BASERUN_SB`, `TEAM_PITCHING_SO`, and `TEAM_BATTING_BB`
+
+
+
+```{r}
+predictions <- predict(m4_log, newdata = mlb_test_log)
+summary(predictions)
 ```
 
 
 
+```{r}
+mlb_test_log$predicted_wins <- predictions 
+```
 
 
+```{r}
+mlb_test_log_final <- mlb_test_log %>%
+  relocate(predicted_wins) 
+```
 
 
-
-
+```{r}
+reactable(mlb_test_log_final)
+```
 
 
 
