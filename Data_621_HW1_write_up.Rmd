@@ -1,0 +1,53 @@
+---
+title: 'Data 621 HW1: MLB Regression Project Write Up'
+author: "(Group 4) Mohamed Hassan-El Serafi, Chun Shing Leung, Keith Colella, Yina, Qiao, Eddie Xu"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true # table of content true
+    toc_depth: 3  # upto three depths of headings (specified by #, ## and ###)
+    theme: united  # many options for theme, this one is my favorite.
+    highlight: tango  # specifies the syntax highlighting style
+    css: my.css  
+
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Sport analytics becomes popular in recent decades as it is used to help athletes and teams perform better or predict future outcomes using historical data. For this assignment, our group reviews baseball data sets with records containing professional team and its performance from the year 1871 to 2006.
+
+In this assignment, we first explored the data sets for better understand the data points and address any potential challenges lies ahead. With insights from our data exploration, we leverage that to conduct a data preparation for our data modeling on 3 different models. We evaluated all linear models and determined the best model that offers the best accuracy and completeness.
+
+# Data Exploration
+
+*Describe the size and the variables in the money ball training data set. Consider that too much detail will cause a manager to lose interest while too little detail will make the manager consider that you aren't doing your job. Some suggestions are given below. Please do NOT treat this as a checklist of things to do to complete the assignment. You should have your own thoughts on what to tell the boss. These are just ideas.*
+
+## Data Sets
+
+The training data set was used to explore any potential variables that can be used for the test data set. The `INDEX` column was removed because it is not a variable. After the data set was reviewed, there were multiple variables with missing (NA) values, with the `TEAM-BATTING_HBP` having the highest amount. BATTING_HBP variable shows a very close mean and median value. This might be due to less data value to be computed. Out of variables, `PITCHING_H`, `PITCHING_BB`, `PITCHING_SO` and `FIELDING_E` are extremely skewed to the right. Interestingly, `BATTING_BB` is not right skewed, compared to all other variables. There were high correlations between batting and pitching stats that were measuring the same feature. For instance, home runs (HR), Walks (BB), Strikeouts (SO), and Hits (H) for batting and pitching were highly correlated with their respective features. This will be important to consider when selecting features for modeling.
+
+# Data Preparation
+
+*Describe how you have transformed the data by changing the original variables or creating new variables. If you did transform the data or create new variables, discuss why you did this.*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
