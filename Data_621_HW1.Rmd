@@ -47,10 +47,6 @@ library(vip)
 
 ## Data Exploration
 
-
-
-
-
 ```{r}
 mlb_training <- read.csv("https://raw.githubusercontent.com/moham6839/Data_621_HW1/main/moneyball-training-data.csv")
 ```
