@@ -987,6 +987,9 @@ reactable(mlb_test_log_final)
 ```
 
 
+```{r}
+write.csv(mlb_test_log_final, "/Users/mohamedhassan/Downloads/data_621_moneyball_pred.csv", row.names = FALSE)
+```
 
 
 
