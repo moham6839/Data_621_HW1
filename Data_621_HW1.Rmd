@@ -169,6 +169,8 @@ ggplot(gather(mlb_training), aes(value)) +
 ```
 
 
+The density and histogram show some of the features with positive skewness to the right. `TEAM_PITCHING_BB`, `TEAM_PITCHING_H`, `TEAM_PITCHING_SO`, and `TEAM_FIELDING_E` have distinct skewness to the right.`TEAM_BATTING_SO`, `TEAM_BATTING_2B`, and `TEAM_FIELDING_DP` appear to show a normal distribution. 
+
 
 
 
@@ -188,7 +190,7 @@ mlb_training %>%
   theme_classic()
 ```
 
-The `TARGET_WINS` column follows a normal distribution. This will be important when deciding which transformation method to use. Since `TARGET_WINS` will be our dependent variable, using a Box-Cox transformation may not be the best method to use since our dependent variable follows a normal distribution 
+The `TARGET_WINS` column follows a normal distribution. This will be important when deciding which transformation method to use. Since `TARGET_WINS` will be our dependent variable, using a Box-Cox transformation may not be the best method to use since our dependent variable already follows a normal distribution. 
 
 
 
@@ -205,6 +207,11 @@ mlb_training %>%
 ```
 
 
+In terms of the relationship between each independent variable and the dependent variable `TARGET_WINS`, the variables that appear to show a linear relationship are `TEAM_BATTING_BB`, `TEAM_BATTING_H`, and `TEAM_BATTING_2B`. Variables 
+
+
+
+
 
 ```{r}
 ggplot(stack(mlb_training), aes(x = ind, y = values)) +
@@ -217,7 +224,7 @@ ggplot(stack(mlb_training), aes(x = ind, y = values)) +
 
 
 
-
+**Measuring Correlation of Features**
 
 
 
@@ -267,10 +274,10 @@ cor_matrix %>%
 ```
 
 
-There were high correlations between batting and pitching stats that were measuring the same feature. For instance, homeruns (HR), Walks (BB), Strikeouts (SO), and Hits (H) for batting and pitching were highly correlated with their respective feature. This will be important to consider when selecting our features for modeling.
+There were high correlation coefficienys between batting and pitching stats that were measuring the same feature. For instance, homeruns (HR), Walks (BB), Strikeouts (SO), and Hits (H) for batting and pitching were highly correlated with their respective feature. With the exception of strikeouts, the same stats have the highest correlation coefficient with wins. 
 
 
-
+**Missing Data**
 
 
 ```{r}
@@ -321,7 +328,7 @@ The amount of missing values in the training and test datasets for `TEAM_BATTING
 
 ### Flaws of Imputing `TEAM_BATTING_HBP`
 
-Dropping HBP was a difficult decision to make, considering HBP is used to calculate On-Base Percentage and At-Bats (AB), with AB also used to calculate Slugging Percentage and Batting Average. Having additional baseball statistics that are commonly used to evaluate team performance would have been helpful for this analysis. However, as you will see, the additional statistics that were produced when imputing HBP created higher than normal stats, particularly with Batting Average. The highest team batting average ever was accomplished by the Philadelphia Phillies in 1894, which had a Batting Average of .350. The mean of the Batting Average column is 0.5283062. Therefore, we can infer that after imputing HBP, the averages of the other statistics become inflated, and therefore unreliable when predicting the number of wins.
+Dropping HBP was a difficult decision to make, considering HBP is used to calculate On-Base Percentage and At-Bats (AB), with AB also used to calculate Slugging Percentage and Batting Average. Having additional baseball statistics that are commonly used to evaluate team performance would have been helpful for this analysis. However, as you will see, the additional statistics that were produced when imputing HBP created higher than normal stats, particularly with Batting Average. The highest team batting average ever was accomplished by the Philadelphia Phillies in 1894, which had a Batting Average of .350. The max of the Batting Average column is 0.9428571. Therefore, we can infer that after imputing HBP, the averages of the other statistics become inflated, and therefore unreliable when predicting the number of wins.
 
 
 ```{r}
@@ -359,7 +366,7 @@ max(mlb_train_imp2$TEAM_BATTING_AVERAGE)
 
 ### Dropping `TEAM_BATTING_HBP` and Imputing Missing Values
 
-
+After deciding to drop HBP, we decided to use the K-Nearest Neighbors function `kNN()` from the VIM package to impute the missing data. Using KNN is advantageous because it considers the relationships between observations, leading to more accurate imputations than simpler methods like mean or mode imputation.
 
 
 **Training**
@@ -427,6 +434,8 @@ reactable(mlb_test_imp)
 
 ```{r}
 sum(is.na(mlb_test_imp))
+sum(is.nan(as.matrix(mlb_test_imp)))
+sum(is.infinite(as.matrix(mlb_test_imp)))
 ```
 
 
@@ -475,15 +484,15 @@ ggcorrplot::ggcorrplot(cor_matrix2, type = "lower",
 ```
 
 
-
+Batting hits had the highest correlation coefficient with `TARGET_WINS`, but had decreased from the initial correlation matrix. The new variable for singles had a correlation coefficient of 0.22 with `TARGET_WINS`, which was 4th-highest behind batting hits, batting doubles, and batting walks. 
 
 
 
 ### Log-Transforming Variables
 
-Since transforming the variables before imputing missing values helps preserve the relationships between the variables in the regression model, we decided to 
+Since transforming the variables before imputing missing values helps preserve the relationships between the variables in the regression model, we decided to transform the data first before using our KNN imputation method.
 
-
+The independent variables that aren't normally distributed show positive skewness, and for this reason we decided to use a log-transformation method. 
 
 
 **Training Set**
@@ -501,6 +510,7 @@ mlb_training_no_hbp <- mlb_training_no_hbp %>%
 ```{r}
 mlb_train_log <- log(mlb_training_no_hbp)
 ```
+
 
 
 
@@ -525,7 +535,7 @@ sum(is.nan(as.matrix(mlb_train_log)))
 sum(is.infinite(as.matrix(mlb_train_log)))
 ```
 
-
+After log-transforming the data, there were a considerable amount of infinite values created. To address this, we turned those values into NA values and imputed the data:
 
 
 ```{r}
@@ -572,7 +582,7 @@ mlb_train_log %>%
 ```
 
 
-
+After log-transforming and imputing the data, 
 
 
 
@@ -667,8 +677,13 @@ For our first model, we utilized the findCorrelation function to determine which
 
 ```{r}
 set.seed(123)
-highlyCorDescr <- findCorrelation(cor(mlb_train_imp), cutoff = .50, verbose = TRUE)
+highlyCorDescr <- findCorrelation(cor(mlb_train_imp), cutoff = .50, verbose = TRUE, names=TRUE)
 ```
+
+
+
+
+
 
 ```{r}
 set.seed(123)
@@ -689,7 +704,7 @@ m1 <- lm(TARGET_WINS ~., data = mlb_train_features)
 summary(m1)
 ```
 
-The initial results
+The initial results produced an Adjusted R-squared of 0.1857, meaning that only 0.1857 of the variance in wins can be explained by the variables in the model. Two variables, `TEAM_PITCHING_H` and `TEAM_PITCHING_BB`, had p-values greater than 0.05, which indicates that each feature does not have statistical significance when explaining the variance of wins. We removed both variables and re-ran the model:
 
 
 
@@ -700,7 +715,7 @@ summary(m1_train_revised)
 ```
 
 
-
+In the revised model, the Adjusted R-squared decreased by 0.01 to 0.1856. The p-value of the overall model is the same as the initial model, with a value below 0.05. The residual standard error increased by 0.01 to 14.22. The F-statistic increased from 75.12 to 104.7, which may indicate that removing the two variables with high p-values helped improve the ability of the predictors to explain the variability in wins
 
 
 
@@ -779,7 +794,7 @@ m2_log <- lm(TARGET_WINS ~., data = mlb_train_features2)
 summary(m2_log)
 ```
 
-The initial results did not produce a trustworthy model. The Adjusted R-squared value was 21.14%, meaning the independent variables in the model can only account for 21.14% of the variance of `TARGET_WINS`. There were a considerable amount of independent variables that had a p-value greater than 0.05, which indicates that they are not statistically significant and could be affecting the model's ability to determine the impact other variables may have on the explaining the variance of `TARGET_WINS`. We decided to re-run the model without the variables with high p-values to see any improvement in our model. The variables with p-values greater than 0.05 and will be removed are `TEAM_BATTING_2B`, `TEAM_BATTING_3B`, `TEAM_BATTING_HR`, `TEAM_BATTING_SO`, and `TEAM_PITCHING_SO`:
+The initial results did not produce a trustworthy model. The Adjusted R-squared value was 18.84%, meaning the independent variables in the model can only account for 18.84% of the variance of `TARGET_WINS`. `TEAM_BASERUN_CS` was the only variable with a p-value greater than 0.05, which indicates that it is not statistically significant and could be affecting the model's ability to determine the impact other variables may have on the explaining the variance of `TARGET_WINS`. We decided to re-run the model without the variable:
 
 
 ```{r}
@@ -789,7 +804,7 @@ summary(m2_log2)
 ```
 
 
-Removing the variables did not impact the Adjusted R-squared value, which shows a decrease of 0.02 to 21.12%. 
+Removing the variable had a slight impact the Adjusted R-squared value, which shows an increase of 0.03 to 18.87%. 
 
 
 ```{r}
@@ -803,7 +818,7 @@ ggplot(m2_log2, aes(x = .fitted, y = .resid)) +
 
 ```{r}
 ggplot(data = m2_log2, aes(x = .resid)) +
-  geom_histogram(binwidth = 0.03) +
+  geom_histogram(binwidth = 0.04) +
   xlab("Residuals")
 ```
 
@@ -945,6 +960,7 @@ Based on the results from each model, we decided to go with the 4th model, `m4_l
 
 
 ```{r}
+set.seed(123)
 predictions <- predict(m4_log, newdata = mlb_test_log)
 summary(predictions)
 ```
@@ -952,6 +968,7 @@ summary(predictions)
 
 
 ```{r}
+set.seed(123)
 mlb_test_log$predicted_wins <- round(exp(predictions))
 ```
 
@@ -962,6 +979,7 @@ mlb_test_log$predicted_wins <- round(exp(predictions))
 
 
 ```{r}
+set.seed(123)
 mlb_test_log_final <- mlb_test_log %>%
   relocate(predicted_wins) 
 ```
@@ -970,6 +988,10 @@ mlb_test_log_final <- mlb_test_log %>%
 ```{r}
 reactable(mlb_test_log_final)
 ```
+
+
+
+
 
 
 
@@ -993,3 +1015,7 @@ reactable(mlb_test_log_final)
 * http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/#google_vignette
 
 * https://www.bookdown.org/rwnahhas/RMPH/mi-fitting.html
+
+* https://www.geeksforgeeks.org/knn-impute-using-categorical-variables-with-caret-package/
+
+* https://towardsdatascience.com/effective-feature-selection-recursive-feature-elimination-using-r-148ff998e4f7
