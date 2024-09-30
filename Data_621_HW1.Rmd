@@ -85,9 +85,9 @@ reactable(mlb_training)
 
 ```{r}
 mlb_training %>%
-  glimpse() %>%
-  kable() %>%
-  kable_styling()
+  glimpse()
+  #kable() %>%
+  #kable_styling()
 ```
 
 
@@ -120,9 +120,9 @@ reactable(mlb_test)
 
 ```{r}
 mlb_test %>%
-  glimpse() %>%
-  kable() %>%
-  kable_styling()
+  glimpse() 
+  # kable() %>%
+  # kable_styling()
 ```
 
 
@@ -971,6 +971,7 @@ summary(predictions)
 set.seed(123)
 mlb_test_log$predicted_wins <- round(exp(predictions))
 ```
+
 
 
 

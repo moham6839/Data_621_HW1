@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1225810/cb33eb96af4a4fd7b3d29020397ae6bd
+bundleId: https://api.rpubs.com/api/v1/document/1225810/cb33eb96af4a4fd7b3d29020397ae6bd
+url: http://rpubs.com/moham6839/1225810
+version: 1
