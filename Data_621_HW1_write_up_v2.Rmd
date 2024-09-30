@@ -1,6 +1,6 @@
 ---
 title: 'Data 621 HW1: MLB Regression Project Write Up'
-author: "(Group 4) Mohamed Hassan-El Serafi, Chun Shing Leung, Keith Colella, Yina,
+author: "(Group 4) Mohamed Hassan-El Serafi, Chun Shing Leung, Keith Colella, Yina
   Qiao, Eddie Xu"
 date: "`r Sys.Date()`"
 output:
